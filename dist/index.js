@@ -31013,14 +31013,26 @@ function parseDotnet(diffContent, filename) {
             const content = line.substring(1).trim();
             if (lowerFilename.endsWith('.csproj') || lowerFilename.endsWith('.vbproj') || lowerFilename.endsWith('.fsproj')) {
                 // Parse .csproj format: <PackageReference Include="Package.Name" Version="1.0.0" />
+                // Also handle packages without version attribute
                 // Case-insensitive attribute matching
-                const match = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*Version\s*=\s*"([^"]+)"/i);
-                if (match) {
+                const matchWithVersion = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*Version\s*=\s*"([^"]+)"/i);
+                if (matchWithVersion) {
                     results.push({
-                        packageName: match[1],
-                        version: match[2],
+                        packageName: matchWithVersion[1],
+                        version: matchWithVersion[2],
                         line: currentLineNumber
                     });
+                }
+                else {
+                    // Try to match PackageReference without Version attribute
+                    const matchNoVersion = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*\/?>/i);
+                    if (matchNoVersion) {
+                        results.push({
+                            packageName: matchNoVersion[1],
+                            version: 'latest',
+                            line: currentLineNumber
+                        });
+                    }
                 }
             }
             else if (lowerFilename.includes('packages.config')) {
@@ -31115,8 +31127,15 @@ function parseGo(diffContent) {
                     });
                 }
             }
-            // Handle replace directives - we don't track these as new dependencies
-            // They're replacing existing ones
+            // Handle replace directives - track replacement target as a new dependency
+            const replaceMatch = content.match(/^replace\s+[^\s]+(?:\s+[^\s]+)?\s+=>\s+([^\s]+)\s+([^\s]+)/);
+            if (replaceMatch) {
+                results.push({
+                    packageName: replaceMatch[1],
+                    version: replaceMatch[2],
+                    line: currentLineNumber
+                });
+            }
         }
         return results;
     }
@@ -31255,15 +31274,26 @@ function parseNpm(diffContent) {
                 const depMatch = line.match(/^\+\s*"(@?[^"]+)"\s*:\s*"([^"]+)"/);
                 if (depMatch) {
                     const packageName = depMatch[1];
-                    const version = depMatch[2];
+                    let version = depMatch[2];
                     // Skip empty or invalid entries
-                    if (packageName && version) {
-                        results.push({
-                            packageName,
-                            version,
-                            line: currentLineNumber
-                        });
+                    if (!packageName || !version)
+                        continue;
+                    // Skip workspace protocol
+                    if (version.startsWith('workspace:'))
+                        continue;
+                    // Skip file protocol
+                    if (version.startsWith('file:'))
+                        continue;
+                    // Flag git/github/bitbucket URLs as MEDIUM risk
+                    if (version.match(/^(git\+|github:|bitbucket:|git:)/i) ||
+                        version.match(/^https?:\/\/.*\.git/)) {
+                        version = 'git+';
                     }
+                    results.push({
+                        packageName,
+                        version,
+                        line: currentLineNumber
+                    });
                 }
             }
         }
@@ -31333,8 +31363,12 @@ function parsePhp(diffContent) {
             if (match) {
                 const packageName = match[1];
                 const version = match[2];
-                // Skip the "php" version constraint
-                if (packageName.toLowerCase() === 'php') {
+                // Skip platform packages
+                const lower = packageName.toLowerCase();
+                if (lower === 'php' || lower === 'php-64bit' || lower === 'hhvm') {
+                    continue;
+                }
+                if (lower.startsWith('ext-') || lower.startsWith('lib-')) {
                     continue;
                 }
                 results.push({
@@ -31378,32 +31412,86 @@ function parseRequirementsTxt(diffContent) {
         currentLineNumber++;
         if (!line.trim().startsWith('+'))
             continue;
-        const content = line.substring(1).trim();
-        // Skip empty lines, comments, and options
-        if (!content || content.startsWith('#') || content.startsWith('-'))
+        let content = line.substring(1).trim();
+        // Skip empty lines, comments, and pip options
+        if (!content || content.startsWith('#'))
             continue;
-        // Check for git URLs - flag as medium risk with special version
-        if (content.match(/^git\+https?:\/\//i)) {
-            const gitMatch = content.match(/git\+https?:\/\/[^#@]+\/([^/\s#@]+?)(?:\.git)?(?:[#@]|$)/i);
-            if (gitMatch) {
+        if (content.startsWith('-r') || content.startsWith('-c') || content.startsWith('-e'))
+            continue;
+        try {
+            let packageName = '';
+            let version = null;
+            // Step 5: Check for VCS URLs with #egg= syntax FIRST (before stripping #)
+            if (content.match(/^git\+https?:\/\//i) || content.match(/^hg\+/i) || content.match(/^svn\+/i) || content.match(/^bzr\+/i)) {
+                const eggMatch = content.match(/#egg=([a-zA-Z0-9_.-]+)/);
+                if (eggMatch) {
+                    packageName = eggMatch[1];
+                }
+                else {
+                    // Extract package name from URL if no #egg= specified
+                    const urlMatch = content.match(/\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:[#@]|$)/);
+                    packageName = urlMatch ? urlMatch[1] : 'unknown-git-package';
+                }
+                version = 'git+';
                 results.push({
-                    packageName: gitMatch[1],
-                    version: 'git+',
+                    packageName,
+                    version,
                     line: currentLineNumber
                 });
+                continue;
             }
-            continue;
+            // Step 1: Strip inline comments (after unquoted #)
+            const hashIndex = content.indexOf('#');
+            if (hashIndex !== -1) {
+                // Simple approach: if there's a #, take everything before it
+                // This won't handle quotes perfectly, but requirements.txt rarely uses quotes
+                content = content.substring(0, hashIndex).trim();
+                if (!content)
+                    continue;
+            }
+            // Step 2: Strip environment markers (after unquoted ;)
+            const semiIndex = content.indexOf(';');
+            if (semiIndex !== -1) {
+                content = content.substring(0, semiIndex).trim();
+                if (!content)
+                    continue;
+            }
+            // Step 3: Strip pip flags (--anything)
+            content = content.replace(/\s+--[a-z-]+(?:\s+[^\s]+)?/gi, '').trim();
+            if (!content)
+                continue;
+            // Step 4: Check for @ URL syntax (e.g., "pkg @ https://...")
+            const atUrlMatch = content.match(/^([a-zA-Z0-9_.-]+(?:\[[^\]]+\])?)\s+@\s+(.+)$/);
+            if (atUrlMatch) {
+                packageName = atUrlMatch[1];
+                version = 'git+'; // Flag as MEDIUM
+                // Strip extras from package name
+                packageName = packageName.replace(/\[[^\]]+\]/, '');
+                results.push({
+                    packageName,
+                    version,
+                    line: currentLineNumber
+                });
+                continue;
+            }
+            // Step 6 & 7: Parse standard package with optional extras and version specifiers
+            // Pattern: package-name[extras]==version or package-name>=version or just package-name
+            const pkgMatch = content.match(/^([a-zA-Z0-9_.-]+)(?:\[[^\]]+\])?(?:\s*([=<>!~]+)\s*([^\s;#]+))?/);
+            if (pkgMatch) {
+                packageName = pkgMatch[1];
+                version = pkgMatch[3] || null;
+                if (packageName) {
+                    results.push({
+                        packageName,
+                        version: version || 'latest',
+                        line: currentLineNumber
+                    });
+                }
+            }
         }
-        // Parse standard requirement line: pkg==1.0, pkg>=2.0, pkg~=1.0, etc.
-        const match = content.match(/^([a-zA-Z0-9_-]+[a-zA-Z0-9._-]*)\s*([=<>!~]+)\s*([^\s;#]+)/);
-        if (match) {
-            const packageName = match[1];
-            const version = match[3];
-            results.push({
-                packageName,
-                version,
-                line: currentLineNumber
-            });
+        catch (error) {
+            // On any line error: skip, log debug, continue — never throw
+            continue;
         }
     }
     return results;
@@ -31548,6 +31636,26 @@ function parseRuby(diffContent) {
             if (!line.trim().startsWith('+'))
                 continue;
             const content = line.substring(1).trim();
+            // Skip empty lines, comments, source/group declarations
+            if (!content || content.startsWith('#'))
+                continue;
+            if (content.match(/^(source|group|platforms?)\s/))
+                continue;
+            if (content.match(/^(end|do)\s*$/))
+                continue;
+            // Skip path dependencies
+            if (content.match(/path:/))
+                continue;
+            // Parse gem with git/github options (flag as MEDIUM)
+            const gitMatch = content.match(/^gem\s+['"]([^'"]+)['"].*?(git|github):/);
+            if (gitMatch) {
+                results.push({
+                    packageName: gitMatch[1],
+                    version: 'git+',
+                    line: currentLineNumber
+                });
+                continue;
+            }
             // Parse gem 'name', 'version' or gem "name", "version"
             // Also handle: gem 'name', '~> version'
             const singleQuoteMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/);
@@ -31564,13 +31672,19 @@ function parseRuby(diffContent) {
                 continue;
             }
             // Handle gem 'name' without explicit version (will be 'latest')
-            const noVersionMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*$/);
+            // But not if it has options like platforms, require, etc on the same line
+            const noVersionMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*(?:,\s*(.+))?$/);
             if (noVersionMatch) {
-                results.push({
-                    packageName: noVersionMatch[1],
-                    version: 'latest',
-                    line: currentLineNumber
-                });
+                const packageName = noVersionMatch[1];
+                const options = noVersionMatch[2];
+                // If there are options, check if they're just platform/require options (not version)
+                if (!options || options.match(/^(platforms?|require):/)) {
+                    results.push({
+                        packageName,
+                        version: 'latest',
+                        line: currentLineNumber
+                    });
+                }
             }
         }
         return results;
@@ -31608,8 +31722,9 @@ function parseRust(diffContent) {
         let inDependenciesBlock = false;
         for (const line of lines) {
             currentLineNumber++;
-            // Check for dependencies sections
-            if (line.match(/^\+?\s*\[(dependencies|dev-dependencies|build-dependencies)\]/i)) {
+            // Check for dependencies sections (including target-specific)
+            if (line.match(/^\+?\s*\[(dependencies|dev-dependencies|build-dependencies)\]/i) ||
+                line.match(/^\+?\s*\[target\.[^\]]+\.dependencies\]/i)) {
                 inDependenciesBlock = true;
                 continue;
             }
@@ -31624,6 +31739,9 @@ function parseRust(diffContent) {
                 continue;
             const content = line.substring(1).trim();
             if (!content || content.startsWith('#'))
+                continue;
+            // Skip path dependencies
+            if (content.match(/path\s*=/))
                 continue;
             // Parse simple version: package = "1.0.0"
             const simpleMatch = content.match(/^([a-zA-Z0-9_-]+)\s*=\s*"([^"]+)"/);

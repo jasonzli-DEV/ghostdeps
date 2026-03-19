@@ -40,14 +40,18 @@ function parseRequirementsTxt(diffContent: string): ParsedDependency[] {
         const eggMatch = content.match(/#egg=([a-zA-Z0-9_.-]+)/);
         if (eggMatch) {
           packageName = eggMatch[1];
-          version = 'git+';
-
-          results.push({
-            packageName,
-            version,
-            line: currentLineNumber
-          });
+        } else {
+          // Extract package name from URL if no #egg= specified
+          const urlMatch = content.match(/\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:[#@]|$)/);
+          packageName = urlMatch ? urlMatch[1] : 'unknown-git-package';
         }
+        version = 'git+';
+
+        results.push({
+          packageName,
+          version,
+          line: currentLineNumber
+        });
         continue;
       }
 
