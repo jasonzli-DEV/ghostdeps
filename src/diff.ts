@@ -1,6 +1,8 @@
-import { Octokit } from '@octokit/rest';
-import { DependencyHit, Ecosystem } from './types';
+import { getOctokit } from '@actions/github';
+import { DependencyHit } from './types';
 import { detectEcosystem, parseDependencyFile } from './parsers';
+
+type Octokit = ReturnType<typeof getOctokit>;
 
 interface FileDiff {
   filename: string;

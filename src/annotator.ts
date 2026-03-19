@@ -1,15 +1,17 @@
-import { Octokit } from '@octokit/rest';
+import { getOctokit } from '@actions/github';
 import * as core from '@actions/core';
 import { ScoredDependency, RiskLevel } from './types';
 import { topSignal } from './scorer';
+
+type Octokit = ReturnType<typeof getOctokit>;
 
 export async function createCheckRun(
   octokit: Octokit,
   owner: string,
   repo: string,
   headSha: string,
-  scoredDeps: ScoredDependency[],
-  failOn: RiskLevel | ''
+  _scoredDeps: ScoredDependency[],
+  _failOn: RiskLevel | ''
 ): Promise<number | null> {
   try {
     const { data: checkRun } = await octokit.rest.checks.create({

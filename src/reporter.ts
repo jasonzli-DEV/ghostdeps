@@ -1,7 +1,9 @@
-import { Octokit } from '@octokit/rest';
+import { getOctokit } from '@actions/github';
 import * as core from '@actions/core';
 import { ScoredDependency } from './types';
 import { topSignal } from './scorer';
+
+type Octokit = ReturnType<typeof getOctokit>;
 
 const COMMENT_MARKER = '<!-- ghostdeps-report -->';
 
@@ -115,7 +117,7 @@ export async function upsertPRComment(
       issue_number: pullNumber
     });
 
-    const existingComment = comments.find(comment =>
+    const existingComment = comments.find((comment: any) =>
       comment.body?.includes(COMMENT_MARKER)
     );
 

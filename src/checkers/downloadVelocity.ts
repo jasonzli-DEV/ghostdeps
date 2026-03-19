@@ -24,7 +24,7 @@ async function checkNpmDownloads(packageName: string): Promise<number | null> {
     const response = await fetchWithTimeout(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(packageName)}`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (typeof data.downloads === 'number') {
       return data.downloads;
     }
@@ -39,7 +39,7 @@ async function checkPyPIDownloads(packageName: string): Promise<number | null> {
     const response = await fetchWithTimeout(`https://pypistats.org/api/packages/${encodeURIComponent(packageName)}/recent`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.data?.last_week) {
       return data.data.last_week;
     }
@@ -56,7 +56,7 @@ async function checkPackageAge(packageName: string, ecosystem: Ecosystem): Promi
     if (ecosystem === 'npm') {
       const response = await fetchWithTimeout(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`);
       if (!response || !response.ok) return null;
-      const data = await response.json();
+      const data: any = await response.json();
       if (data.time?.created) {
         const createdDate = new Date(data.time.created);
         const ageInDays = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
@@ -65,7 +65,7 @@ async function checkPackageAge(packageName: string, ecosystem: Ecosystem): Promi
     } else if (ecosystem === 'python') {
       const response = await fetchWithTimeout(`https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`);
       if (!response || !response.ok) return null;
-      const data = await response.json();
+      const data: any = await response.json();
       if (data.releases) {
         const versions = Object.keys(data.releases);
         let earliestDate: Date | null = null;

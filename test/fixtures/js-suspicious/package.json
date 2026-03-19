@@ -1,0 +1,11 @@
+{
+  "name": "test-project-suspicious",
+  "version": "1.0.0",
+  "dependencies": {
+    "react-codeshift": "1.0.0",
+    "lodahs": "4.17.21",
+    "webpack-config-utils": "0.0.1",
+    "expres": "^4.18.0",
+    "axios": "^1.4.0"
+  }
+}

@@ -1,0 +1,9 @@
+[package]
+name = "test-project"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde-utils = "0.0.1"
+tokoi = "1.0"
+reqest = "0.11"

@@ -24,7 +24,7 @@ async function checkNpmAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.time?.created) {
       return new Date(data.time.created);
     }
@@ -39,7 +39,7 @@ async function checkPyPIAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.releases) {
       const versions = Object.keys(data.releases);
       if (versions.length === 0) return null;
@@ -68,7 +68,7 @@ async function checkRubyGemsAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://rubygems.org/api/v1/gems/${encodeURIComponent(packageName)}.json`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.created_at) {
       return new Date(data.created_at);
     }
@@ -83,7 +83,7 @@ async function checkCratesIOAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://crates.io/api/v1/crates/${encodeURIComponent(packageName)}`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.crate?.created_at) {
       return new Date(data.crate.created_at);
     }
@@ -108,7 +108,7 @@ async function checkGoProxyAge(packageName: string): Promise<Date | null> {
     const infoResponse = await fetchWithTimeout(`https://proxy.golang.org/${encodeURIComponent(packageName)}/@v/${encodeURIComponent(firstVersion)}.info`);
     if (!infoResponse || !infoResponse.ok) return null;
 
-    const info = await infoResponse.json();
+    const info: any = await infoResponse.json();
     if (info.Time) {
       return new Date(info.Time);
     }
@@ -123,7 +123,7 @@ async function checkPackagistAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://repo.packagist.org/p2/${encodeURIComponent(packageName)}.json`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.packages?.[packageName]) {
       const versions = Object.values(data.packages[packageName]) as any[];
       if (versions.length > 0) {
@@ -152,7 +152,7 @@ async function checkNuGetAge(packageName: string): Promise<Date | null> {
     const response = await fetchWithTimeout(`https://api.nuget.org/v3/registration5-gz-semver2/${encodeURIComponent(lowerPackageName)}/index.json`);
     if (!response || !response.ok) return null;
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.items && data.items.length > 0) {
       const firstItem = data.items[0];
       if (firstItem.items && firstItem.items.length > 0) {
