@@ -1,0 +1,8 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "react-codeshift": "1.0.0",
+    "lodahs": "4.17.21"
+  }
+}

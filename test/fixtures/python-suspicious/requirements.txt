@@ -1,0 +1,4 @@
+python-datutil==1.0.0
+reqeusts==2.28.2
+openai-utils==0.0.1
+flask==2.3.0

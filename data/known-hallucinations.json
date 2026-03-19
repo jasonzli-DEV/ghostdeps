@@ -1,0 +1,93 @@
+{
+  "npm": [
+    "react-codeshift",
+    "node-fetch-wrapper",
+    "express-middleware-logger",
+    "lodash-helper",
+    "webpack-config-utils",
+    "babel-plugin-react-transform",
+    "huggingface-hub-mirror",
+    "react-use-hooks",
+    "next-auth-provider",
+    "axios-middleware",
+    "mongoose-utils",
+    "prisma-client-helper",
+    "tailwind-config-utils",
+    "eslint-plugin-react-hooks-extra",
+    "typescript-utils",
+    "zod-validator",
+    "react-query-utils",
+    "express-validator-middleware",
+    "jest-setup-utils",
+    "vite-plugin-helper",
+    "react-router-utils",
+    "next-middleware",
+    "webpack-dev-utils",
+    "babel-transform-utils",
+    "typescript-helper",
+    "node-cache-utils",
+    "express-body-parser-utils",
+    "react-hooks-helper",
+    "jest-mock-utils",
+    "nextjs-config-helper"
+  ],
+  "python": [
+    "python-datutil",
+    "langchain-helper",
+    "openai-utils",
+    "huggingface-datasets-loader",
+    "sklearn-utils",
+    "pd-utils",
+    "tensorflow-utils",
+    "torch-helper",
+    "flask-middleware",
+    "django-rest-helper",
+    "fastapi-utils",
+    "pydantic-validator",
+    "numpy-helper",
+    "scipy-utils",
+    "matplotlib-helper",
+    "requests-oauth",
+    "sqlalchemy-helper",
+    "celery-utils",
+    "pytest-helper",
+    "boto3-utils",
+    "transformers-utils",
+    "openai-helper",
+    "langchain-utils",
+    "pandas-helper",
+    "scikit-learn-utils",
+    "tensorflow-helper",
+    "pytorch-utils",
+    "flask-utils",
+    "django-utils",
+    "fastapi-helper"
+  ],
+  "ruby": [
+    "rails-helper",
+    "activerecord-utils",
+    "sinatra-middleware",
+    "rspec-helpers",
+    "devise-helper"
+  ],
+  "go": [
+    "github.com/gin-gonic/gin-helper",
+    "github.com/gorilla/mux-utils",
+    "github.com/go-chi/chi-middleware"
+  ],
+  "rust": [
+    "tokio-helper",
+    "serde-utils",
+    "actix-middleware"
+  ],
+  "php": [
+    "laravel-helper",
+    "symfony-utils",
+    "composer-middleware"
+  ],
+  "dotnet": [
+    "AspNetCore.Helper",
+    "EntityFramework.Utils",
+    "Newtonsoft.Json.Helper"
+  ]
+}
