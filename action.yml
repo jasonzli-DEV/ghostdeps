@@ -1,0 +1,22 @@
+name: "ghostdeps"
+description: "Scans PRs for hallucinated/suspicious deps from AI coding."
+branding:
+  icon: "ghost"
+  color: "purple"
+inputs:
+  fail-on:
+    description: "Fail on risk level: high | medium | low. Unset = warn only."
+    required: false
+    default: ""
+  post-comment:
+    description: "Post PR comment summary. Default: true"
+    default: "true"
+  ecosystems:
+    description: "Ecosystems to scan. Default: all"
+    default: "all"
+  token:
+    description: "GitHub token. Default: github.token"
+    default: ${{ github.token }}
+runs:
+  using: "node20"
+  main: "dist/index.js"
