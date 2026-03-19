@@ -25,35 +25,87 @@ function parseRequirementsTxt(diffContent: string): ParsedDependency[] {
 
     if (!line.trim().startsWith('+')) continue;
 
-    const content = line.substring(1).trim();
+    let content = line.substring(1).trim();
 
-    // Skip empty lines, comments, and options
-    if (!content || content.startsWith('#') || content.startsWith('-')) continue;
+    // Skip empty lines, comments, and pip options
+    if (!content || content.startsWith('#')) continue;
+    if (content.startsWith('-r') || content.startsWith('-c') || content.startsWith('-e')) continue;
 
-    // Check for git URLs - flag as medium risk with special version
-    if (content.match(/^git\+https?:\/\//i)) {
-      const gitMatch = content.match(/git\+https?:\/\/[^#@]+\/([^/\s#@]+?)(?:\.git)?(?:[#@]|$)/i);
-      if (gitMatch) {
+    try {
+      let packageName = '';
+      let version: string | null = null;
+
+      // Step 5: Check for VCS URLs with #egg= syntax FIRST (before stripping #)
+      if (content.match(/^git\+https?:\/\//i) || content.match(/^hg\+/i) || content.match(/^svn\+/i) || content.match(/^bzr\+/i)) {
+        const eggMatch = content.match(/#egg=([a-zA-Z0-9_.-]+)/);
+        if (eggMatch) {
+          packageName = eggMatch[1];
+          version = 'git+';
+
+          results.push({
+            packageName,
+            version,
+            line: currentLineNumber
+          });
+        }
+        continue;
+      }
+
+      // Step 1: Strip inline comments (after unquoted #)
+      const hashIndex = content.indexOf('#');
+      if (hashIndex !== -1) {
+        // Simple approach: if there's a #, take everything before it
+        // This won't handle quotes perfectly, but requirements.txt rarely uses quotes
+        content = content.substring(0, hashIndex).trim();
+        if (!content) continue;
+      }
+
+      // Step 2: Strip environment markers (after unquoted ;)
+      const semiIndex = content.indexOf(';');
+      if (semiIndex !== -1) {
+        content = content.substring(0, semiIndex).trim();
+        if (!content) continue;
+      }
+
+      // Step 3: Strip pip flags (--anything)
+      content = content.replace(/\s+--[a-z-]+(?:\s+[^\s]+)?/gi, '').trim();
+      if (!content) continue;
+
+      // Step 4: Check for @ URL syntax (e.g., "pkg @ https://...")
+      const atUrlMatch = content.match(/^([a-zA-Z0-9_.-]+(?:\[[^\]]+\])?)\s+@\s+(.+)$/);
+      if (atUrlMatch) {
+        packageName = atUrlMatch[1];
+        version = 'git+'; // Flag as MEDIUM
+
+        // Strip extras from package name
+        packageName = packageName.replace(/\[[^\]]+\]/, '');
+
         results.push({
-          packageName: gitMatch[1],
-          version: 'git+',
+          packageName,
+          version,
           line: currentLineNumber
         });
+        continue;
       }
+
+      // Step 6 & 7: Parse standard package with optional extras and version specifiers
+      // Pattern: package-name[extras]==version or package-name>=version or just package-name
+      const pkgMatch = content.match(/^([a-zA-Z0-9_.-]+)(?:\[[^\]]+\])?(?:\s*([=<>!~]+)\s*([^\s;#]+))?/);
+      if (pkgMatch) {
+        packageName = pkgMatch[1];
+        version = pkgMatch[3] || null;
+
+        if (packageName) {
+          results.push({
+            packageName,
+            version: version || 'latest',
+            line: currentLineNumber
+          });
+        }
+      }
+    } catch (error) {
+      // On any line error: skip, log debug, continue — never throw
       continue;
-    }
-
-    // Parse standard requirement line: pkg==1.0, pkg>=2.0, pkg~=1.0, etc.
-    const match = content.match(/^([a-zA-Z0-9_-]+[a-zA-Z0-9._-]*)\s*([=<>!~]+)\s*([^\s;#]+)/);
-    if (match) {
-      const packageName = match[1];
-      const version = match[3];
-
-      results.push({
-        packageName,
-        version,
-        line: currentLineNumber
-      });
     }
   }
 

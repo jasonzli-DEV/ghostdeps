@@ -30,6 +30,25 @@ export function parseRuby(diffContent: string): ParsedDependency[] {
 
       const content = line.substring(1).trim();
 
+      // Skip empty lines, comments, source/group declarations
+      if (!content || content.startsWith('#')) continue;
+      if (content.match(/^(source|group|platforms?)\s/)) continue;
+      if (content.match(/^(end|do)\s*$/)) continue;
+
+      // Skip path dependencies
+      if (content.match(/path:/)) continue;
+
+      // Parse gem with git/github options (flag as MEDIUM)
+      const gitMatch = content.match(/^gem\s+['"]([^'"]+)['"].*?(git|github):/);
+      if (gitMatch) {
+        results.push({
+          packageName: gitMatch[1],
+          version: 'git+',
+          line: currentLineNumber
+        });
+        continue;
+      }
+
       // Parse gem 'name', 'version' or gem "name", "version"
       // Also handle: gem 'name', '~> version'
       const singleQuoteMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/);
@@ -49,13 +68,20 @@ export function parseRuby(diffContent: string): ParsedDependency[] {
       }
 
       // Handle gem 'name' without explicit version (will be 'latest')
-      const noVersionMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*$/);
+      // But not if it has options like platforms, require, etc on the same line
+      const noVersionMatch = content.match(/^gem\s+['"]([^'"]+)['"]\s*(?:,\s*(.+))?$/);
       if (noVersionMatch) {
-        results.push({
-          packageName: noVersionMatch[1],
-          version: 'latest',
-          line: currentLineNumber
-        });
+        const packageName = noVersionMatch[1];
+        const options = noVersionMatch[2];
+
+        // If there are options, check if they're just platform/require options (not version)
+        if (!options || options.match(/^(platforms?|require):/)) {
+          results.push({
+            packageName,
+            version: 'latest',
+            line: currentLineNumber
+          });
+        }
       }
     }
 
