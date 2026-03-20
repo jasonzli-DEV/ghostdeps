@@ -9,6 +9,33 @@ interface FileDiff {
   patch?: string;
 }
 
+interface ParseOptions {
+  file: FileDiff;
+  allHits: DependencyHit[];
+}
+
+function parseFileDiff({ file, allHits }: ParseOptions): void {
+  // Skip binary files
+  if (!file.patch) return;
+
+  const ecosystem = detectEcosystem(file.filename);
+  if (!ecosystem) return;
+
+  // Parse dependencies from the diff
+  const parsedDeps = parseDependencyFile(file.patch, file.filename, ecosystem);
+
+  // Convert to DependencyHit
+  for (const dep of parsedDeps) {
+    allHits.push({
+      packageName: dep.packageName,
+      version: dep.version,
+      ecosystem,
+      file: file.filename,
+      line: dep.line
+    });
+  }
+}
+
 export async function fetchPRDiff(
   octokit: Octokit,
   owner: string,
@@ -30,25 +57,7 @@ export async function fetchPRDiff(
       const files = response.data as FileDiff[];
 
       for (const file of files) {
-        // Skip binary files
-        if (!file.patch) continue;
-
-        const ecosystem = detectEcosystem(file.filename);
-        if (!ecosystem) continue;
-
-        // Parse dependencies from the diff
-        const parsedDeps = parseDependencyFile(file.patch, file.filename, ecosystem);
-
-        // Convert to DependencyHit
-        for (const dep of parsedDeps) {
-          allHits.push({
-            packageName: dep.packageName,
-            version: dep.version,
-            ecosystem,
-            file: file.filename,
-            line: dep.line
-          });
-        }
+        parseFileDiff({ file, allHits });
       }
     }
 
@@ -56,6 +65,35 @@ export async function fetchPRDiff(
   } catch (error) {
     // Log error but don't throw - return empty array
     console.error('Error fetching PR diff:', error);
+    return [];
+  }
+}
+
+export async function fetchCommitDiff(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  baseSha: string,
+  headSha: string
+): Promise<DependencyHit[]> {
+  const allHits: DependencyHit[] = [];
+
+  try {
+    const comparison = await octokit.rest.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${baseSha}...${headSha}`
+    });
+
+    const files = (comparison.data.files || []) as FileDiff[];
+    for (const file of files) {
+      parseFileDiff({ file, allHits });
+    }
+
+    return allHits;
+  } catch (error) {
+    // Log error but don't throw - return empty array
+    console.error('Error fetching commit diff:', error);
     return [];
   }
 }

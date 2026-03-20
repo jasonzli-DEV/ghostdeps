@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { ActionInputs, Ecosystem, ScoredDependency, RiskLevel, DependencyHit } from './types';
-import { fetchPRDiff } from './diff';
+import { fetchPRDiff, fetchCommitDiff } from './diff';
 import { checkRegistryAge } from './checkers/registryAge';
 import { checkDownloadVelocity } from './checkers/downloadVelocity';
 import { checkCrossEcosystem } from './checkers/crossEcosystem';
@@ -77,16 +77,19 @@ async function run(): Promise<void> {
 
     // Get PR context
     const context = github.context;
-    if (!context.payload.pull_request) {
-      core.info('Not a pull request event - skipping');
+    const pullRequest = context.payload.pull_request;
+    const isPushEvent = context.eventName === 'push';
+
+    if (!pullRequest && !isPushEvent) {
+      core.info(`Unsupported event '${context.eventName}' - skipping`);
       return;
     }
 
-    const pullRequest = context.payload.pull_request;
     const owner = context.repo.owner;
     const repo = context.repo.repo;
-    const pullNumber = pullRequest.number;
-    const headSha = pullRequest.head.sha;
+    const pullNumber = pullRequest?.number;
+    const headSha = pullRequest?.head.sha || context.sha;
+    const baseSha = isPushEvent ? context.payload.before : pullRequest?.base.sha;
 
     // Initialize Octokit with GHES support
     const apiUrl = process.env.GITHUB_API_URL || 'https://api.github.com';
@@ -94,10 +97,16 @@ async function run(): Promise<void> {
       baseUrl: apiUrl
     });
 
-    core.info(`Scanning PR #${pullNumber}...`);
+    if (pullNumber) {
+      core.info(`Scanning PR #${pullNumber}...`);
+    } else {
+      core.info(`Scanning commit range ${baseSha}...${headSha}...`);
+    }
 
     // Fetch diff and parse dependencies
-    const allDeps = await fetchPRDiff(octokit, owner, repo, pullNumber);
+    const allDeps = pullNumber
+      ? await fetchPRDiff(octokit, owner, repo, pullNumber)
+      : await fetchCommitDiff(octokit, owner, repo, baseSha || '', headSha);
     core.info(`Found ${allDeps.length} total dependencies`);
 
     // Filter by ecosystems
@@ -133,8 +142,12 @@ async function run(): Promise<void> {
     }
 
     // Upsert PR comment
-    await upsertPRComment(octokit, owner, repo, pullNumber, scoredDeps, headSha, inputs.postComment);
-    core.info('Updated PR comment');
+    if (pullNumber) {
+      await upsertPRComment(octokit, owner, repo, pullNumber, scoredDeps, headSha, inputs.postComment);
+      core.info('Updated PR comment');
+    } else {
+      core.info('No PR context available - skipping PR comment');
+    }
 
     // Determine if we should fail
     const highCount = scoredDeps.filter(d => d.riskLevel === 'high').length;

@@ -30729,7 +30729,28 @@ function checkTyposquat(packageName, ecosystem) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fetchPRDiff = fetchPRDiff;
+exports.fetchCommitDiff = fetchCommitDiff;
 const parsers_1 = __nccwpck_require__(8311);
+function parseFileDiff({ file, allHits }) {
+    // Skip binary files
+    if (!file.patch)
+        return;
+    const ecosystem = (0, parsers_1.detectEcosystem)(file.filename);
+    if (!ecosystem)
+        return;
+    // Parse dependencies from the diff
+    const parsedDeps = (0, parsers_1.parseDependencyFile)(file.patch, file.filename, ecosystem);
+    // Convert to DependencyHit
+    for (const dep of parsedDeps) {
+        allHits.push({
+            packageName: dep.packageName,
+            version: dep.version,
+            ecosystem,
+            file: file.filename,
+            line: dep.line
+        });
+    }
+}
 async function fetchPRDiff(octokit, owner, repo, pullNumber) {
     const allHits = [];
     try {
@@ -30743,24 +30764,7 @@ async function fetchPRDiff(octokit, owner, repo, pullNumber) {
         for await (const response of iterator) {
             const files = response.data;
             for (const file of files) {
-                // Skip binary files
-                if (!file.patch)
-                    continue;
-                const ecosystem = (0, parsers_1.detectEcosystem)(file.filename);
-                if (!ecosystem)
-                    continue;
-                // Parse dependencies from the diff
-                const parsedDeps = (0, parsers_1.parseDependencyFile)(file.patch, file.filename, ecosystem);
-                // Convert to DependencyHit
-                for (const dep of parsedDeps) {
-                    allHits.push({
-                        packageName: dep.packageName,
-                        version: dep.version,
-                        ecosystem,
-                        file: file.filename,
-                        line: dep.line
-                    });
-                }
+                parseFileDiff({ file, allHits });
             }
         }
         return allHits;
@@ -30768,6 +30772,26 @@ async function fetchPRDiff(octokit, owner, repo, pullNumber) {
     catch (error) {
         // Log error but don't throw - return empty array
         console.error('Error fetching PR diff:', error);
+        return [];
+    }
+}
+async function fetchCommitDiff(octokit, owner, repo, baseSha, headSha) {
+    const allHits = [];
+    try {
+        const comparison = await octokit.rest.repos.compareCommitsWithBasehead({
+            owner,
+            repo,
+            basehead: `${baseSha}...${headSha}`
+        });
+        const files = (comparison.data.files || []);
+        for (const file of files) {
+            parseFileDiff({ file, allHits });
+        }
+        return allHits;
+    }
+    catch (error) {
+        // Log error but don't throw - return empty array
+        console.error('Error fetching commit diff:', error);
         return [];
     }
 }
@@ -30879,23 +30903,32 @@ async function run() {
         const inputs = parseInputs();
         // Get PR context
         const context = github.context;
-        if (!context.payload.pull_request) {
-            core.info('Not a pull request event - skipping');
+        const pullRequest = context.payload.pull_request;
+        const isPushEvent = context.eventName === 'push';
+        if (!pullRequest && !isPushEvent) {
+            core.info(`Unsupported event '${context.eventName}' - skipping`);
             return;
         }
-        const pullRequest = context.payload.pull_request;
         const owner = context.repo.owner;
         const repo = context.repo.repo;
-        const pullNumber = pullRequest.number;
-        const headSha = pullRequest.head.sha;
+        const pullNumber = pullRequest?.number;
+        const headSha = pullRequest?.head.sha || context.sha;
+        const baseSha = isPushEvent ? context.payload.before : pullRequest?.base.sha;
         // Initialize Octokit with GHES support
         const apiUrl = process.env.GITHUB_API_URL || 'https://api.github.com';
         const octokit = github.getOctokit(inputs.token, {
             baseUrl: apiUrl
         });
-        core.info(`Scanning PR #${pullNumber}...`);
+        if (pullNumber) {
+            core.info(`Scanning PR #${pullNumber}...`);
+        }
+        else {
+            core.info(`Scanning commit range ${baseSha}...${headSha}...`);
+        }
         // Fetch diff and parse dependencies
-        const allDeps = await (0, diff_1.fetchPRDiff)(octokit, owner, repo, pullNumber);
+        const allDeps = pullNumber
+            ? await (0, diff_1.fetchPRDiff)(octokit, owner, repo, pullNumber)
+            : await (0, diff_1.fetchCommitDiff)(octokit, owner, repo, baseSha || '', headSha);
         core.info(`Found ${allDeps.length} total dependencies`);
         // Filter by ecosystems
         const filteredDeps = filterByEcosystems(allDeps, inputs.ecosystems);
@@ -30924,8 +30957,13 @@ async function run() {
             core.info('Updated check run with annotations');
         }
         // Upsert PR comment
-        await (0, reporter_1.upsertPRComment)(octokit, owner, repo, pullNumber, scoredDeps, headSha, inputs.postComment);
-        core.info('Updated PR comment');
+        if (pullNumber) {
+            await (0, reporter_1.upsertPRComment)(octokit, owner, repo, pullNumber, scoredDeps, headSha, inputs.postComment);
+            core.info('Updated PR comment');
+        }
+        else {
+            core.info('No PR context available - skipping PR comment');
+        }
         // Determine if we should fail
         const highCount = scoredDeps.filter(d => d.riskLevel === 'high').length;
         const mediumCount = scoredDeps.filter(d => d.riskLevel === 'medium').length;
