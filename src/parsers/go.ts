@@ -78,8 +78,15 @@ export function parseGo(diffContent: string): ParsedDependency[] {
         }
       }
 
-      // Handle replace directives - we don't track these as new dependencies
-      // They're replacing existing ones
+      // Handle replace directives - track replacement target as a new dependency
+      const replaceMatch = content.match(/^replace\s+[^\s]+(?:\s+[^\s]+)?\s+=>\s+([^\s]+)\s+([^\s]+)/);
+      if (replaceMatch) {
+        results.push({
+          packageName: replaceMatch[1],
+          version: replaceMatch[2],
+          line: currentLineNumber
+        });
+      }
     }
 
     return results;

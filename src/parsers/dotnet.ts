@@ -34,14 +34,25 @@ export function parseDotnet(diffContent: string, filename: string): ParsedDepend
 
       if (lowerFilename.endsWith('.csproj') || lowerFilename.endsWith('.vbproj') || lowerFilename.endsWith('.fsproj')) {
         // Parse .csproj format: <PackageReference Include="Package.Name" Version="1.0.0" />
+        // Also handle packages without version attribute
         // Case-insensitive attribute matching
-        const match = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*Version\s*=\s*"([^"]+)"/i);
-        if (match) {
+        const matchWithVersion = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*Version\s*=\s*"([^"]+)"/i);
+        if (matchWithVersion) {
           results.push({
-            packageName: match[1],
-            version: match[2],
+            packageName: matchWithVersion[1],
+            version: matchWithVersion[2],
             line: currentLineNumber
           });
+        } else {
+          // Try to match PackageReference without Version attribute
+          const matchNoVersion = content.match(/<PackageReference\s+Include\s*=\s*"([^"]+)"[^>]*\/?>/i);
+          if (matchNoVersion) {
+            results.push({
+              packageName: matchNoVersion[1],
+              version: 'latest',
+              line: currentLineNumber
+            });
+          }
         }
       } else if (lowerFilename.includes('packages.config')) {
         // Parse packages.config format: <package id="Package.Name" version="1.0.0" />

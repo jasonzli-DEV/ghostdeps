@@ -1,0 +1,13 @@
+source 'https://rubygems.org'
+
+gem 'rails', '~> 7.0'
+gem 'devise', '>= 4.0'
+gem 'mylib', git: 'https://github.com/org/mylib'
+gem 'fake-gem-xyz'
+
+group :development, :test do
+  gem 'rspec-rails'
+  gem 'factory_bot_rails'
+end
+
+gem 'tzinfo-data', platforms: [:mingw, :mswin]

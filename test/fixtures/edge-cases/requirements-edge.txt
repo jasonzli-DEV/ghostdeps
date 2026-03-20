@@ -1,0 +1,12 @@
+# Test every edge case in one file
+Package-With-Dots.and_underscores==1.0
+UPPERCASE-PACKAGE>=2.0
+pkg-with-extras[extra1,extra2]
+pkg; python_version>='3.8' and sys_platform=='win32'
+pkg --only-binary :all: ; sys_platform=='linux'
+git+https://github.com/org/pkg.git#egg=mypkg
+pkg @ https://example.com/pkg-1.0.tar.gz
+-r other.txt
+-e .
+# commented
+

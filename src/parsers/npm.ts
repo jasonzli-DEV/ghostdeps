@@ -56,16 +56,28 @@ export function parseNpm(diffContent: string): ParsedDependency[] {
         const depMatch = line.match(/^\+\s*"(@?[^"]+)"\s*:\s*"([^"]+)"/);
         if (depMatch) {
           const packageName = depMatch[1];
-          const version = depMatch[2];
+          let version = depMatch[2];
 
           // Skip empty or invalid entries
-          if (packageName && version) {
-            results.push({
-              packageName,
-              version,
-              line: currentLineNumber
-            });
+          if (!packageName || !version) continue;
+
+          // Skip workspace protocol
+          if (version.startsWith('workspace:')) continue;
+
+          // Skip file protocol
+          if (version.startsWith('file:')) continue;
+
+          // Flag git/github/bitbucket URLs as MEDIUM risk
+          if (version.match(/^(git\+|github:|bitbucket:|git:)/i) ||
+              version.match(/^https?:\/\/.*\.git/)) {
+            version = 'git+';
           }
+
+          results.push({
+            packageName,
+            version,
+            line: currentLineNumber
+          });
         }
       }
     }

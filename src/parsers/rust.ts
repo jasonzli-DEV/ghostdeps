@@ -27,8 +27,9 @@ export function parseRust(diffContent: string): ParsedDependency[] {
     for (const line of lines) {
       currentLineNumber++;
 
-      // Check for dependencies sections
-      if (line.match(/^\+?\s*\[(dependencies|dev-dependencies|build-dependencies)\]/i)) {
+      // Check for dependencies sections (including target-specific)
+      if (line.match(/^\+?\s*\[(dependencies|dev-dependencies|build-dependencies)\]/i) ||
+          line.match(/^\+?\s*\[target\.[^\]]+\.dependencies\]/i)) {
         inDependenciesBlock = true;
         continue;
       }
@@ -44,6 +45,9 @@ export function parseRust(diffContent: string): ParsedDependency[] {
 
       const content = line.substring(1).trim();
       if (!content || content.startsWith('#')) continue;
+
+      // Skip path dependencies
+      if (content.match(/path\s*=/)) continue;
 
       // Parse simple version: package = "1.0.0"
       const simpleMatch = content.match(/^([a-zA-Z0-9_-]+)\s*=\s*"([^"]+)"/);

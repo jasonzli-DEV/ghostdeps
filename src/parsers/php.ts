@@ -59,8 +59,12 @@ export function parsePhp(diffContent: string): ParsedDependency[] {
         const packageName = match[1];
         const version = match[2];
 
-        // Skip the "php" version constraint
-        if (packageName.toLowerCase() === 'php') {
+        // Skip platform packages
+        const lower = packageName.toLowerCase();
+        if (lower === 'php' || lower === 'php-64bit' || lower === 'hhvm') {
+          continue;
+        }
+        if (lower.startsWith('ext-') || lower.startsWith('lib-')) {
           continue;
         }
 
